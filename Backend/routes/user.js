@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { User } = require("../database/db");
+const { User, Account } = require("../database/db");
 const jwt = require("jsonwebtoken");
 const { userSignup, userSignin, userUpdate } = require("../validation");
 const { genSalt, hash, compare } = require("bcrypt");
@@ -10,7 +10,7 @@ router.get("/", (req, res) => {
 });
 
 // SIGNUP
-router.post("/signup", async (req, res) => {
+router.post("/signup", async (req, res, next) => {
   const { username, firstname, lastname, password } = req.body;
   const parsedData = userSignup.safeParse({
     username,
@@ -40,6 +40,10 @@ router.post("/signup", async (req, res) => {
       lastname,
       password: hashedPassword,
     });
+    await Account.create({
+      userId: newUser._id,
+      balance: 1 + Math.floor(Math.random() * 10000),
+    });
     const authToken = jwt.sign({ userId: newUser._id }, process.env.JWT_SECRET);
     res.status(200).json({
       message: "User created sucessfully",
@@ -51,7 +55,7 @@ router.post("/signup", async (req, res) => {
 });
 
 // SIGNIN
-router.post("/signin", async (req, res) => {
+router.post("/signin", async (req, res, next) => {
   const { username, password } = req.body;
   const parsedData = userSignin.safeParse({ username, password });
   if (!parsedData.success) {
@@ -72,7 +76,7 @@ router.post("/signin", async (req, res) => {
         message: "Invalid password. Please try again.",
       });
     }
-    const authToken = jwt.sign({ username }, process.env.JWT_SECRET);
+    const authToken = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
     res.status(200).json({
       message: "User created sucessfully",
       token: authToken,
@@ -83,7 +87,7 @@ router.post("/signin", async (req, res) => {
 });
 
 // UPDATE USER DETAILTS
-router.put("/", authMiddleware, async (req, res) => {
+router.put("/", authMiddleware, async (req, res, next) => {
   const { password, firstname, lastname } = req.body;
   const { userId } = req.user;
   try {
@@ -114,15 +118,15 @@ router.put("/", authMiddleware, async (req, res) => {
 });
 
 // SEARCH USER
-router.get("/bulk", authMiddleware, (req, res) => {
+router.get("/bulk", authMiddleware, async (req, res, next) => {
   const { filter } = req.query;
   try {
-    const allUsers = User.find({
+    const allUsers = await User.find({
       $or: [
         { firstname: { $regex: filter, $options: "i" } },
         { lastname: { $regex: filter, $options: "i" } },
       ],
-    }).select("firstname", "lastname");
+    }).select("firstname lastname");
     res.status(200).json({
       users: allUsers,
     });

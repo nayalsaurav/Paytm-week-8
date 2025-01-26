@@ -51,6 +51,7 @@ const accountSchema = new mongoose.Schema({
   balance: {
     type: Number,
     required: true,
+    minimum: 0,
   },
 });
 
