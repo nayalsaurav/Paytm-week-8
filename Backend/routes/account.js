@@ -20,7 +20,7 @@ router.get("/balance", authMiddleware, async (req, res, next) => {
   }
 });
 
-router.get("/transfer", authMiddleware, async (req, res, next) => {
+router.post("/transfer", authMiddleware, async (req, res, next) => {
   const { to, amount } = req.body;
 
   const parsedData = transferValidation.safeParse({ to, amount });
