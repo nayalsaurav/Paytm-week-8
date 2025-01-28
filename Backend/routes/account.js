@@ -24,9 +24,16 @@ router.get("/balance", authMiddleware, async (req, res, next) => {
 router.post("/transfer", authMiddleware, async (req, res, next) => {
   const { to, amount } = req.body;
 
-  const parsedData = transferValidation.safeParse({ to, amount });
+  // Validate inputs
+  const parsedData = transferValidation.safeParse({
+    to,
+    amount: Number(amount),
+  });
   if (!parsedData.success) {
-    return res.status(400).json({ message: "Invalid account/Invalid amount" });
+    return res.status(400).json({
+      message: "Invalid input",
+      errors: parsedData.error.errors,
+    });
   }
 
   const session = await mongoose.startSession();
@@ -34,33 +41,44 @@ router.post("/transfer", authMiddleware, async (req, res, next) => {
 
   try {
     const { userId } = req.user;
-    console.log(userId);
     const sender = await Account.findOne({ userId }).session(session);
     const receiver = await Account.findOne({ userId: to }).session(session);
 
-    if (!sender || !receiver) {
+    if (!sender) {
       await session.abortTransaction();
-      return res.status(400).json({ message: "Invalid account" });
+      return res.status(404).json({ message: "Sender account not found" });
+    }
+    if (!receiver) {
+      await session.abortTransaction();
+      return res.status(404).json({ message: "Receiver account not found" });
+    }
+
+    if (sender._id.equals(receiver._id)) {
+      await session.abortTransaction();
+      return res
+        .status(400)
+        .json({ message: "Cannot send money to own account" });
     }
 
     if (sender.balance < amount) {
       await session.abortTransaction();
-      return res.status(400).json({ message: "Insufficient Balance" });
+      return res.status(400).json({ message: "Insufficient balance" });
     }
 
-    await Account.updateOne({ userId }, { $inc: { balance: -amount } }).session(
-      session
-    );
-
-    await Account.updateOne(
-      { userId: to },
-      { $inc: { balance: amount } }
-    ).session(session);
+    await Promise.all([
+      Account.updateOne({ userId }, { $inc: { balance: -amount } }).session(
+        session
+      ),
+      Account.updateOne({ userId: to }, { $inc: { balance: amount } }).session(
+        session
+      ),
+    ]);
 
     await session.commitTransaction();
     res.status(200).json({ message: "Transfer successful" });
   } catch (error) {
     await session.abortTransaction();
+    console.error("Transfer failed:", error);
     next(error);
   } finally {
     session.endSession();

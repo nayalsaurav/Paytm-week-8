@@ -12,7 +12,7 @@ function authMiddleware(req, res, next) {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     if (decoded.userId) {
-      req.user = { userId: decoded.userId };
+      req.user = { userId: decoded.userId, name: decoded.name };
       next();
     } else {
       throw new Error("Unauthorized user");

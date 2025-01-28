@@ -5,6 +5,7 @@ const jwt = require("jsonwebtoken");
 const { userSignup, userSignin, userUpdate } = require("../validation");
 const { genSalt, hash, compare } = require("bcrypt");
 const authMiddleware = require("../middlewares/middleware");
+const { default: errorMap } = require("zod/locales/en.js");
 router.get("/", (req, res) => {
   res.send("hello from user router");
 });
@@ -44,10 +45,14 @@ router.post("/signup", async (req, res, next) => {
       userId: newUser._id,
       balance: 1 + Math.floor(Math.random() * 10000),
     });
-    const authToken = jwt.sign({ userId: newUser._id }, process.env.JWT_SECRET);
+    const authToken = jwt.sign(
+      { userId: newUser._id, name: `${firstname} ${lastname}` },
+      process.env.JWT_SECRET
+    );
     res.status(200).json({
       message: "User created sucessfully",
       token: authToken,
+      fullname: `${firstname} ${lastname}`,
     });
   } catch (error) {
     next(error);
@@ -76,10 +81,14 @@ router.post("/signin", async (req, res, next) => {
         message: "Invalid password. Please try again.",
       });
     }
-    const authToken = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
+    const authToken = jwt.sign(
+      { userId: user._id, name: `${user.firstname} ${user.lastname}` },
+      process.env.JWT_SECRET
+    );
     res.status(200).json({
       message: "User signed in sucessfully",
       token: authToken,
+      fullname: `${user.firstname} ${user.lastname}`,
     });
   } catch (error) {
     next(error);
@@ -119,20 +128,26 @@ router.put("/", authMiddleware, async (req, res, next) => {
 
 // SEARCH USER
 router.get("/bulk", authMiddleware, async (req, res, next) => {
-  const { filter } = req.query;
+  const filter = (req.query.filter || "").trim();
   try {
     const allUsers = await User.find({
       $or: [
         { firstname: { $regex: filter, $options: "i" } },
         { lastname: { $regex: filter, $options: "i" } },
       ],
-    }).select("firstname lastname");
+    }).select("firstname lastname username");
     res.status(200).json({
       users: allUsers,
     });
   } catch (error) {
     next(error);
   }
+});
+
+router.get("/verify", authMiddleware, async (req, res, next) => {
+  res.status(200).json({
+    message: "User verified",
+  });
 });
 
 module.exports = router;
